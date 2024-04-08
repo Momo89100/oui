@@ -1,95 +1,81 @@
-import random
 
-def embaucher_migrant(categorie, sante_econ):
-    bonus = {"cadre": 120, "ouvrier": 15, "intermediaire": 60}
-    return sante_econ + bonus.get(categorie, 0)
+import numpy as np
 
-def simulation_formation(personnes, sante_initiale, cout_mensuel, mois_formation):
-    resultats_globaux = []
-    for _ in range(personnes):
-        sante_econ = sante_initiale
-        resultats_mois = [sante_econ]
-        for mois in range(1, mois_formation + 1):
-            sante_econ -= cout_mensuel
-            resultats_mois.append(sante_econ)
-        resultats_globaux.append(resultats_mois)
-    return resultats_globaux
+# Durée de la simulation en mois
+DUREE_SIMULATION = 62
 
-def simulation_migration(resultats_formation, categorie, sante_depart, mois_migration):
-    resultats_globaux = []
-    for formation in resultats_formation:
-        sante_econ = sante_depart
-        resultats_mois = formation[:]
-        for mois in range(1, mois_migration + 1):
-            sante_econ = embaucher_migrant(categorie, sante_econ)
-            resultats_mois.append(sante_econ)
-        resultat_annuel = resultats_mois[-1] - resultats_mois[len(formation)]
-        resultats_globaux.append((resultats_mois, resultat_annuel))
-    return resultats_globaux
+# Santé économique de base
+BASE_SANTE_ECONOMIQUE = 1000
 
-def afficher_resultats_mois(resultats_mois, categorie):
-    print(f"Résultats mois par mois pour la personne en {categorie} :")
-    for mois, resultat in enumerate(resultats_mois):
-        print(f"Mois {mois}: Santé économique = {resultat}")
+# Définition des différents types d'emplois avec leurs caractéristiques
+OUVRIER = {"nom": "Ouvrier", "cout_mensuel_formation": 100, "duree_formation": 4, "gain_mensuel_emploi": 150, "estimation_par_mois": 100}
+INTERMEDIAIRE = {"nom": "Intermédiaire", "cout_mensuel_formation": 150, "duree_formation": 30, "gain_mensuel_emploi": 200, "estimation_par_mois": 40}
+CADRE = {"nom": "Cadre", "cout_mensuel_formation": 210, "duree_formation": 60, "gain_mensuel_emploi": 120, "estimation_par_mois": 15}
 
-def simuler_formation_migration(categorie, nombre_personnes, sante_initiale, cout_mensuel_formation, mois_formation, mois_migration):
-    resultats_globaux = []
-    resultats_formation = simulation_formation(nombre_personnes, sante_initiale, cout_mensuel_formation, mois_formation)
+# Liste des différents types d'emploi
+EMPLOIS = [OUVRIER, INTERMEDIAIRE, CADRE]
+
+# Fonction pour obtenir de nouveaux migrants de chaque type d'emploi
+def obtenir_nouveaux_migrants(liste_migrants, sante_economique):
+    for emploi in EMPLOIS:
+        if sante_economique > 0:
+            nouveaux_migrants_emploi = np.random.poisson(emploi["estimation_par_mois"])
+        else:
+            nouveaux_migrants_emploi = 0
+        liste_migrants[emploi["nom"]] += [emploi["duree_formation"]] * nouveaux_migrants_emploi
+    return liste_migrants
+
+# Fonction principale
+def main():
+    sante_economique = BASE_SANTE_ECONOMIQUE
+    liste_migrants = {emploi["nom"]: [] for emploi in EMPLOIS}
+    evolution_sante = []
+    evolution_migrants_ouvrier = []
+    evolution_migrants_intermediaire = []
+    evolution_migrants_cadre = []
+
+    # Pour les nouveaux graphiques
+    cout_formation_mensuel = []
+    gains_mensuels_migrants = []
+
+    # Définir des mois aléatoires pour les événements (crises ou booms)
+    evenements_mois = np.random.choice(range(1, DUREE_SIMULATION), size=2, replace=False)
     
-    if resultats_formation:  # Vérifier si la liste n'est pas vide
-        sante_depart = resultats_formation[0][-1]
-        resultats_migration = simulation_migration(resultats_formation, categorie, sante_depart, mois_migration)
-        resultats_globaux.extend(resultats_migration)
+    for mois in range(DUREE_SIMULATION):
+        evolution_sante.append(sante_economique)
+        liste_migrants = obtenir_nouveaux_migrants(liste_migrants, sante_economique)
+
+        nb_migrants_ouvrier = len(liste_migrants["Ouvrier"])
+        nb_migrants_intermediaire = len(liste_migrants["Intermédiaire"])
+        nb_migrants_cadre = len(liste_migrants["Cadre"])
+
+        evolution_migrants_ouvrier.append(nb_migrants_ouvrier)
+        evolution_migrants_intermediaire.append(nb_migrants_intermediaire)
+        evolution_migrants_cadre.append(nb_migrants_cadre)
+
+        cout_formation = 0
+        gains_mensuels = 0
+        for emploi in EMPLOIS:
+            liste = liste_migrants[emploi["nom"]]
+            for i in range(len(liste)):
+                if liste[i] > 0:
+                    liste[i] -= 1
+                    sante_economique -= emploi["cout_mensuel_formation"]
+                    cout_formation += emploi["cout_mensuel_formation"]
+                else:
+                    sante_economique += emploi["gain_mensuel_emploi"]
+                    gains_mensuels += emploi["gain_mensuel_emploi"]
+                    
+        cout_formation_mensuel.append(cout_formation)
+        gains_mensuels_migrants.append(gains_mensuels)
+
+        # Appliquer un événement aléatoire si le mois actuel est un mois d'événement
+        if mois in evenements_mois:
+            # Choisir aléatoirement entre un boom économique et une crise
+            evenement_type = np.random.choice(["boom", "crise"])
+            if evenement_type == "boom":
+                sante_economique *= 1 + np.random.uniform(0.1, 0.2)  # Augmenter de 10% à 20%
+            else:
+                sante_economique *= 1 - np.random.uniform(0.1, 0.2)  # Diminuer de 10% à 20%
+
     
-    return resultats_globaux
-
-def determiner_nombre_embauches(sante_economique):
-    moyenne = 0.5
-    ecart_type = 0.2
-    return round(random.normalvariate(moyenne, ecart_type) * sante_economique)
-
-# Initialisation des paramètres
-nombre_personnes = 5
-sante_initiale = 100
-cout_mensuel_formation_cadre = 55
-mois_formation_cadre = 8
-mois_migration_cadre = 12
-cout_mensuel_formation_ouvrier = 10
-mois_migration_ouvrier = 12
-duree_simulation = 12  # 1 an
-
-def afficher_resultats_total(resultats_migration, categorie):
-    total = sum(resultat[1] for resultat in resultats_migration)
-    print(f"Résultat total pour {categorie} : {total}")
-
-# Simulation de la formation et migration pour un cadre
-resultats_migration_cadre = simuler_formation_migration("cadre", 1, sante_initiale, cout_mensuel_formation_cadre, mois_formation_cadre, mois_migration_cadre)
-
-# Affichage des résultats mois par mois pour un cadre
-for resultat in resultats_migration_cadre:
-    afficher_resultats_mois(resultat[0], "cadre")
-
-# Affichage du résultat total pour un cadre
-afficher_resultats_total(resultats_migration_cadre, "cadre")
-
-# Simulation de la formation et migration pour un ouvrier
-nombre_embauches_ouvriers = determiner_nombre_embauches(sante_initiale)
-resultats_migration_ouvrier = simuler_formation_migration("ouvrier", 1, sante_initiale, cout_mensuel_formation_ouvrier, 4, mois_migration_ouvrier)
-
-# Affichage des résultats mois par mois pour un ouvrier
-for resultat in resultats_migration_ouvrier:
-    afficher_resultats_mois(resultat[0], "ouvrier")
-
-# Affichage du résultat total pour un ouvrier
-afficher_resultats_total(resultats_migration_ouvrier, "ouvrier")
-
-# Calcul du résultat total pour un cadre
-total_cadre = sum(resultat[1] for resultat in resultats_migration_cadre)
-
-# Calcul du résultat total pour un ouvrier
-total_ouvrier = sum(resultat[1] for resultat in resultats_migration_ouvrier)
-
-# Calcul de la somme des deux résultats totaux
-somme_totale = total_cadre + total_ouvrier
-
-print(f"La somme des résultats totaux pour les cadres et les ouvriers est : {somme_totale}")
